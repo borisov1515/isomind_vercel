@@ -1,0 +1,30 @@
+# Python / Backend
+venv/
+__pycache__/
+*.pyc
+.env
+.pytest_cache/
+
+# Docker and Build
+.dockerignore
+infrastructure/chromium_data/
+
+# Model Weights and HuggingFace cache (CRITICAL)
+# Do NOT commit heavy weights!
+*.gguf
+*.safetensors
+*.bin
+models/
+huggingface/
+ollama_data/
+vllm_cache/
+
+# OS / Editor
+.DS_Store
+.vscode/
+.idea/
+
+# VNC and Streaming Logs
+logs/
+*.log
+x11vnc.log

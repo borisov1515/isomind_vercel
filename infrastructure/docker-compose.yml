@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  sandbox:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    image: isomind-sandbox:latest
+    container_name: isomind-agent-1
+    ports:
+      - "5900:5900"  # VNC Viewer Protocol
+      - "8000:8000"  # FastAPI HTTP
+    shm_size: "2gb"  # Important for Chrome stability
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    volumes:
+      - chromium_data:/app/chromium_data
+
+volumes:
+  chromium_data:
