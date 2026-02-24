@@ -1,24 +1,60 @@
-name: Auto-Stop Vast.ai Instance
+name: Auto-Stop Vast.ai Instance on Inactivity
 
-# This workflow runs automatically every day at 1:00 AM MSK/CET (22:00 UTC)
-# It securely stops your Vast.ai instance so you don't burn money if you forget to turn it off.
+# This workflow runs automatically every 5 minutes.
+# 1. It pings the Orchestrator API (/v1/health) to keep the free Render.com server from sleeping.
+# 2. It checks how many seconds have passed since the last real user activity.
+# 3. If inactivity > 1800 seconds (30 minutes), it securely stops the Vast.ai instance to save money.
 
 on:
   schedule:
-    # 22:00 UTC is 01:00 AM in Moscow/Minsk
-    - cron: '0 22 * * *'
+    - cron: '*/5 * * * *'
   
-  # Allows you to trigger it manually from the GitHub UI under the "Actions" tab
   workflow_dispatch:
 
 jobs:
-  stop-instance:
+  monitor-and-stop:
     runs-on: ubuntu-latest
     steps:
+      - name: Ping Orchestrator and Check Activity
+        id: check_activity
+        run: |
+          # Fetch health endpoint
+          RESPONSE=$(curl -s "https://isomind-orchestrator.onrender.com/v1/health" || echo "failed")
+          
+          if [ "$RESPONSE" = "failed" ]; then
+            echo "Orchestrator API is unreachable."
+            echo "stop=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "API Response: $RESPONSE"
+          
+          # Use jq to extract inactive_seconds
+          INACTIVE_SECONDS=$(echo $RESPONSE | jq -r '.inactive_seconds')
+          
+          if [ "$INACTIVE_SECONDS" = "null" ] || [ -z "$INACTIVE_SECONDS" ]; then
+            echo "Failed to parse inactive_seconds. Assuming active."
+            echo "stop=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "Seconds since last activity: $INACTIVE_SECONDS"
+          
+          # Check if > 1800 (30 minutes)
+          if (( $(echo "$INACTIVE_SECONDS > 1800" | bc -l) )); then
+            echo "Inactivity threshold reached. Triggering shutdown."
+            echo "stop=true" >> $GITHUB_OUTPUT
+          else
+            echo "Instance is active. Doing nothing."
+            echo "stop=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Install Vast.ai CLI
+        if: steps.check_activity.outputs.stop == 'true'
         run: pip install vastai
 
       - name: Stop the Instance
+        if: steps.check_activity.outputs.stop == 'true'
         env:
           VAST_API_KEY: ${{ secrets.VAST_API_KEY }}
           VAST_INSTANCE_ID: ${{ secrets.VAST_INSTANCE_ID }}
@@ -28,10 +64,7 @@ jobs:
             exit 1
           fi
           
-          # Authorize CLI
           vastai set api-key $VAST_API_KEY
-          
-          # Send stop command
           vastai stop instance $VAST_INSTANCE_ID
           
-          echo "✅ Send stop command to Vast.ai instance $VAST_INSTANCE_ID."
+          echo "✅ Send stop command to Vast.ai instance $VAST_INSTANCE_ID due to 30 mins of inactivity."

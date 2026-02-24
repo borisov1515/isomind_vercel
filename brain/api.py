@@ -51,7 +51,26 @@ async def lifespan(app: FastAPI):
             proc.kill()
     print("🧹 Tunnels closed.")
 
+from datetime import datetime
+from fastapi import Request
+
+LAST_ACTIVITY_TIME = datetime.utcnow()
+
 app = FastAPI(title="IsoMind Orchestration API", lifespan=lifespan)
+
+@app.middleware("http")
+async def track_activity(request: Request, call_next):
+    global LAST_ACTIVITY_TIME
+    if request.url.path != "/v1/health":
+        LAST_ACTIVITY_TIME = datetime.utcnow()
+    response = await call_next(request)
+    return response
+
+@app.get("/v1/health")
+async def health_check():
+    global LAST_ACTIVITY_TIME
+    inactive_seconds = (datetime.utcnow() - LAST_ACTIVITY_TIME).total_seconds()
+    return {"status": "ok", "inactive_seconds": inactive_seconds}
 
 app.add_middleware(
     CORSMiddleware,
