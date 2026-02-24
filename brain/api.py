@@ -22,10 +22,20 @@ async def lifespan(app: FastAPI):
     # Startup: Launch SSH Tunnels
     print(f"🚀 Booting IsoMind Orchestrator... connecting to {SSH_HOST}:{SSH_PORT}...")
     
-    # Check if we have the key in an environment variable (for Render.com)
     env_key = os.getenv("VAST_SSH_KEY")
+    env_key_b64 = os.getenv("VAST_SSH_KEY_B64")
+    
     startup_info["env_key_present"] = bool(env_key)
-    if env_key:
+    startup_info["env_key_b64_present"] = bool(env_key_b64)
+    
+    if env_key_b64:
+        import base64
+        with open(SSH_KEY_PATH, "w") as f:
+            f.write(base64.b64decode(env_key_b64).decode('utf-8'))
+        os.chmod(SSH_KEY_PATH, 0o600)
+        startup_info["key_written"] = True
+        print("🔑 Loaded SSH Key from Base64 Environment Variable!")
+    elif env_key:
         with open(SSH_KEY_PATH, "w") as f:
             env_key = env_key.replace("\\n", "\n")
             
