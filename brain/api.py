@@ -27,8 +27,18 @@ async def lifespan(app: FastAPI):
     startup_info["env_key_present"] = bool(env_key)
     if env_key:
         with open(SSH_KEY_PATH, "w") as f:
-            # Handle both literal newlines and escaped newlines
-            f.write(env_key.replace("\\n", "\n"))
+            env_key = env_key.replace("\\n", "\n")
+            
+            # If the user pasted the key into a single-line input field on Render, 
+            # it loses its vital newline formatting which causes libcrypto errors.
+            if env_key.count("\n") < 2:
+                print("⚠️ Formatting corrupted single-line SSH key string...")
+                body = env_key.replace("-----BEGIN OPENSSH PRIVATE KEY-----", "").replace("-----END OPENSSH PRIVATE KEY-----", "").strip()
+                # body might have spaces separating the base64 chunks
+                body_lines = body.replace(" ", "\n")
+                env_key = f"-----BEGIN OPENSSH PRIVATE KEY-----\n{body_lines}\n-----END OPENSSH PRIVATE KEY-----\n"
+
+            f.write(env_key)
         # SSH requires strict permissions on the private key
         os.chmod(SSH_KEY_PATH, 0o600)
         startup_info["key_written"] = True
@@ -129,6 +139,20 @@ async def get_screenshot(marks: bool = False):
         return resp.json()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Proxy error: {str(e)}")
+
+class NavigateRequest(BaseModel):
+    url: str
+
+@app.post("/v1/action/browser/navigate")
+async def browser_navigate(req: NavigateRequest):
+    import requests
+    PROXY_URL = os.getenv("AGENT_API_URL", "http://localhost:8000")
+    try:
+        resp = requests.post(f"{PROXY_URL}/v1/action/browser/navigate", json={"url": req.url})
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Proxy navigate error: {str(e)}")
 
 class TeachRequest(BaseModel):
     blueprint_id: str
