@@ -28,3 +28,6 @@ vllm_cache/
 logs/
 *.log
 x11vnc.log
+keys.md
+creds.md
+.env*
