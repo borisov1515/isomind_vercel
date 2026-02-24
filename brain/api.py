@@ -70,15 +70,19 @@ async def lifespan(app: FastAPI):
             f"root@{SSH_HOST}"
         ]
         print(f"🔗 Establishing tunnel for port {port}...")
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
         tunnels.append(proc)
         
-        # Async task to read stderr
-        async def read_stderr(p: subprocess.Popen, pt: int):
+        # Async task to read stderr without blocking the main event loop
+        async def read_stderr(p, pt: int):
             while True:
-                line = p.stderr.readline()
+                line = await p.stderr.readline()
                 if not line: break
-                ssh_logs.append(f"[Port {pt}] {line.strip()}")
+                ssh_logs.append(f"[Port {pt}] {line.decode().strip()}")
                 
         asyncio.create_task(read_stderr(proc, port))
         
@@ -93,8 +97,8 @@ async def lifespan(app: FastAPI):
     for proc in tunnels:
         proc.terminate()
         try:
-            proc.wait(timeout=2)
-        except subprocess.TimeoutExpired:
+            await asyncio.wait_for(proc.wait(), timeout=2.0)
+        except asyncio.TimeoutError:
             proc.kill()
     print("🧹 Tunnels closed.")
 
