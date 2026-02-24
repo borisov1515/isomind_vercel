@@ -15,6 +15,8 @@ SSH_KEY_PATH = os.path.expanduser("~/.ssh/isomind_key")
 
 tunnels = []
 
+ssh_logs = []
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: Launch SSH Tunnels
@@ -39,11 +41,21 @@ async def lifespan(app: FastAPI):
             "-p", SSH_PORT,
             "-i", SSH_KEY_PATH,
             "-o", "StrictHostKeyChecking=no",
+            "-v", # Add verbose logging
             f"root@{SSH_HOST}"
         ]
         print(f"🔗 Establishing tunnel for port {port}...")
-        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         tunnels.append(proc)
+        
+        # Async task to read stderr
+        async def read_stderr(p: subprocess.Popen, pt: int):
+            while True:
+                line = p.stderr.readline()
+                if not line: break
+                ssh_logs.append(f"[Port {pt}] {line.strip()}")
+                
+        asyncio.create_task(read_stderr(proc, port))
         
     # Give tunnels a moment to bind
     await asyncio.sleep(2)
@@ -67,6 +79,10 @@ from fastapi import Request
 LAST_ACTIVITY_TIME = datetime.utcnow()
 
 app = FastAPI(title="IsoMind Orchestration API", lifespan=lifespan)
+
+@app.get("/v1/debug/ssh")
+async def get_ssh_logs():
+    return {"logs": ssh_logs[-100:]}
 
 @app.middleware("http")
 async def track_activity(request: Request, call_next):
