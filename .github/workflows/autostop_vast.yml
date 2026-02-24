@@ -1,0 +1,37 @@
+name: Auto-Stop Vast.ai Instance
+
+# This workflow runs automatically every day at 1:00 AM MSK/CET (22:00 UTC)
+# It securely stops your Vast.ai instance so you don't burn money if you forget to turn it off.
+
+on:
+  schedule:
+    # 22:00 UTC is 01:00 AM in Moscow/Minsk
+    - cron: '0 22 * * *'
+  
+  # Allows you to trigger it manually from the GitHub UI under the "Actions" tab
+  workflow_dispatch:
+
+jobs:
+  stop-instance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Vast.ai CLI
+        run: pip install vastai
+
+      - name: Stop the Instance
+        env:
+          VAST_API_KEY: ${{ secrets.VAST_API_KEY }}
+          VAST_INSTANCE_ID: ${{ secrets.VAST_INSTANCE_ID }}
+        run: |
+          if [ -z "$VAST_API_KEY" ] || [ -z "$VAST_INSTANCE_ID" ]; then
+            echo "Error: Secrets VAST_API_KEY and VAST_INSTANCE_ID must be set in the repository."
+            exit 1
+          fi
+          
+          # Authorize CLI
+          vastai set api-key $VAST_API_KEY
+          
+          # Send stop command
+          vastai stop instance $VAST_INSTANCE_ID
+          
+          echo "✅ Send stop command to Vast.ai instance $VAST_INSTANCE_ID."
