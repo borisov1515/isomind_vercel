@@ -20,6 +20,16 @@ async def lifespan(app: FastAPI):
     # Startup: Launch SSH Tunnels
     print(f"🚀 Booting IsoMind Orchestrator... connecting to {SSH_HOST}:{SSH_PORT}...")
     
+    # Check if we have the key in an environment variable (for Render.com)
+    env_key = os.getenv("VAST_SSH_KEY")
+    if env_key:
+        os.makedirs(os.path.dirname(SSH_KEY_PATH), exist_ok=True)
+        with open(SSH_KEY_PATH, "w") as f:
+            f.write(env_key.replace("\\n", "\n"))
+        # SSH requires strict permissions on the private key
+        os.chmod(SSH_KEY_PATH, 0o600)
+        print("🔑 Loaded SSH Key from Environment Variable.")
+    
     # We need to forward Agent API (8000), vLLM (8001), Embedding API (8002), and WebRTC/VNC (8080)
     ports = [8000, 8001, 8002, 8080]
     for port in ports:
