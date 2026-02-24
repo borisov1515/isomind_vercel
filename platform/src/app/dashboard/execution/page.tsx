@@ -20,6 +20,12 @@ export default function ExecutionPage() {
         async function fetchBlueprints() {
             const { data } = await supabase.from('blueprints').select('id, name').order('created_at', { ascending: false })
             if (data) setBlueprints(data)
+
+            if (typeof window !== 'undefined') {
+                const params = new URLSearchParams(window.location.search)
+                const bpId = params.get('blueprintId')
+                if (bpId) setSelectedBlueprint(bpId)
+            }
         }
         fetchBlueprints()
     }, [])

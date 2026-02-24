@@ -18,6 +18,8 @@ export default function StudioPage() {
     const [actionType, setActionType] = useState('click')
     const [typeText, setTypeText] = useState('')
     const [submitting, setSubmitting] = useState(false)
+    const [navUrl, setNavUrl] = useState('')
+    const [navigating, setNavigating] = useState(false)
     const imageRef = useRef<HTMLImageElement>(null)
 
     const supabase = createClient()
@@ -108,35 +110,92 @@ export default function StudioPage() {
         setSubmitting(false)
     }
 
+    const handleNavigate = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!navUrl) return
+
+        setNavigating(true)
+        try {
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003';
+            let formattedUrl = navUrl.startsWith('http') ? navUrl : `https://${navUrl}`
+
+            // Note: Our API proxies to the agent API navigation
+            // We need to make sure the endpoint exists on the Orchestrator
+            // Wait, api.py doesn't have a /v1/action/browser/navigate proxy endpoint 
+            // We will need to map it if we haven't, or just proxy to the sandbox directly.
+            const res = await fetch(`${API_URL}/v1/action/browser/navigate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: formattedUrl })
+            })
+
+            if (res.ok) {
+                setTimeout(() => fetchScreenshot(), 2000) // fetch new state after nav
+            } else {
+                alert("Failed to navigate")
+            }
+        } catch (e) {
+            console.error(e)
+            alert("API Error")
+        }
+        setNavigating(false)
+    }
+
     return (
         <div className="flex flex-col h-[calc(100vh-8rem)]">
             <div className="flex items-end justify-between mb-6">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight">Agent Studio</h1>
                     <p className="text-zinc-400 mt-2 max-w-2xl">
-                        Teach the agent how to navigate. First, select or create a Blueprint.
-                        Then, click <b>"Capture State"</b> to view the remote browser. Click directly on the image to record a visual action!
+                        Teach the agent how to navigate. First, select or create a Blueprint. Type a URL and click <b>Go</b> to load a page, then click <b>Capture State</b> to record a visual action!
                     </p>
                 </div>
+                <div className="flex flex-col gap-4">
+                    <div className="flex gap-4">
+                        <button
+                            onClick={fetchScreenshot}
+                            disabled={loadingImage || !selectedBlueprint}
+                            className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center border border-zinc-700"
+                        >
+                            {loadingImage ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Camera className="w-4 h-4 mr-2" />}
+                            Capture State
+                        </button>
+                        <select
+                            value={selectedBlueprint}
+                            onChange={(e) => setSelectedBlueprint(e.target.value)}
+                            className="bg-zinc-900 border border-zinc-800 text-sm text-white rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-primary w-64 appearance-none"
+                        >
+                            <option value="">Select a Blueprint...</option>
+                            {blueprints.map(bp => (
+                                <option key={bp.id} value={bp.id}>{bp.name}</option>
+                            ))}
+                        </select>
+                        <button
+                            onClick={handleCreateBlueprint}
+                            className="bg-zinc-800 hover:bg-zinc-700 text-white p-2 rounded-lg border border-zinc-700 transition-colors"
+                        >
+                            <Plus className="w-5 h-5" />
+                        </button>
+                    </div>
 
-                <div className="flex items-center gap-4 bg-zinc-900/50 p-2 rounded-xl border border-zinc-800">
-                    <select
-                        value={selectedBlueprint}
-                        onChange={(e) => setSelectedBlueprint(e.target.value)}
-                        className="bg-zinc-800 border-none text-sm text-white rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-primary w-64 appearance-none"
-                    >
-                        <option value="">Select Blueprint to Edit...</option>
-                        {blueprints.map(bp => (
-                            <option key={bp.id} value={bp.id}>{bp.name}</option>
-                        ))}
-                    </select>
-                    <button
-                        onClick={handleCreateBlueprint}
-                        className="bg-zinc-800 hover:bg-zinc-700 text-white p-2 rounded-lg font-medium transition-colors border border-zinc-700"
-                        title="Create New Blueprint"
-                    >
-                        <Plus className="w-5 h-5" />
-                    </button>
+                    {/* Navigation Bar */}
+                    <form onSubmit={handleNavigate} className="flex gap-2">
+                        <input
+                            type="text"
+                            className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 text-sm text-white outline-none focus:border-primary/50"
+                            placeholder="https://google.com"
+                            value={navUrl}
+                            onChange={e => setNavUrl(e.target.value)}
+                            disabled={navigating || !selectedBlueprint}
+                        />
+                        <button
+                            type="submit"
+                            disabled={navigating || !selectedBlueprint}
+                            className="bg-primary hover:bg-blue-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors mr-[18px]"
+                        >
+                            {navigating ? "Loading..." : "Go"}
+                        </button>
+                    </form>
                 </div>
             </div>
 

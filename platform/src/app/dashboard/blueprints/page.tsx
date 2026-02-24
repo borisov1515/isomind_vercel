@@ -3,12 +3,14 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { motion } from 'framer-motion'
+import { useRouter } from 'next/navigation'
 import { Route, Play, Database, Clock, ChevronRight } from 'lucide-react'
 
 export default function BlueprintsPage() {
     const [blueprints, setBlueprints] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const supabase = createClient()
+    const router = useRouter()
 
     useEffect(() => {
         async function fetchBlueprints() {
@@ -93,7 +95,9 @@ export default function BlueprintsPage() {
                                     </div>
 
                                     <div className="flex gap-3">
-                                        <button className="text-primary hover:text-white bg-primary/10 hover:bg-primary px-4 py-2 rounded-lg font-medium transition-colors flex items-center border border-primary/20 hover:border-primary">
+                                        <button
+                                            onClick={() => router.push(`/dashboard/execution?blueprintId=${bp.id}`)}
+                                            className="text-primary hover:text-white bg-primary/10 hover:bg-primary px-4 py-2 rounded-lg font-medium transition-colors flex items-center border border-primary/20 hover:border-primary">
                                             <Play className="w-4 h-4 mr-2" />
                                             Execute
                                         </button>
