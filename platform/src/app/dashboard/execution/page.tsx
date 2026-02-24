@@ -31,7 +31,8 @@ export default function ExecutionPage() {
         setLogs([`[SYSTEM] Connecting to Local Orchestration API...`])
 
         try {
-            const response = await fetch('http://localhost:8003/v1/execute', {
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003';
+            const response = await fetch(`${API_URL}/v1/execute`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

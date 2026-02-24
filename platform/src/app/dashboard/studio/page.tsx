@@ -33,13 +33,14 @@ export default function StudioPage() {
     const fetchScreenshot = async () => {
         setLoadingImage(true)
         try {
-            // Fetch via local API orchestrator which handles the CORS and tunnels to Vast.ai
-            const res = await fetch('http://localhost:8003/v1/perception/screenshot?marks=false')
+            // Fetch via Orchestrator API which handles the CORS and tunnels to Vast.ai
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003';
+            const res = await fetch(`${API_URL}/v1/perception/screenshot?marks=false`)
             const data = await res.json()
             setImage(`data:image/png;base64,${data.image_base64}`)
         } catch (e) {
             console.error("Failed to fetch screenshot:", e)
-            alert("Failed to connect to Orchestrator API (is Port 8003 tunneled?)")
+            alert("Failed to connect to Orchestrator API (Check backend logs)")
         }
         setLoadingImage(false)
     }
@@ -75,8 +76,9 @@ export default function StudioPage() {
 
         setSubmitting(true)
         try {
-            // Send the X, Y command to the Orchestrator on Port 8003
-            const res = await fetch('http://localhost:8003/v1/teach/action', {
+            // Send the X, Y command to the Orchestrator
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003';
+            const res = await fetch(`${API_URL}/v1/teach/action`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -101,7 +103,7 @@ export default function StudioPage() {
             }
         } catch (e) {
             console.error(e)
-            alert("Failed to connect to Orchestrator API (localhost:8003)")
+            alert("Failed to connect to Orchestrator API")
         }
         setSubmitting(false)
     }
