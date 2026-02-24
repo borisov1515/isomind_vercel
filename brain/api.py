@@ -11,11 +11,11 @@ from contextlib import asynccontextmanager
 # Read Vast.ai connection details
 SSH_HOST = os.getenv("VAST_IP", "217.171.200.22")
 SSH_PORT = os.getenv("VAST_PORT", "43097")
-SSH_KEY_PATH = os.path.expanduser("~/.ssh/isomind_key")
+SSH_KEY_PATH = "/tmp/isomind_key"
 
 tunnels = []
-
 ssh_logs = []
+startup_info = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -24,13 +24,18 @@ async def lifespan(app: FastAPI):
     
     # Check if we have the key in an environment variable (for Render.com)
     env_key = os.getenv("VAST_SSH_KEY")
+    startup_info["env_key_present"] = bool(env_key)
     if env_key:
-        os.makedirs(os.path.dirname(SSH_KEY_PATH), exist_ok=True)
         with open(SSH_KEY_PATH, "w") as f:
+            # Handle both literal newlines and escaped newlines
             f.write(env_key.replace("\\n", "\n"))
         # SSH requires strict permissions on the private key
         os.chmod(SSH_KEY_PATH, 0o600)
-        print("🔑 Loaded SSH Key from Environment Variable.")
+        startup_info["key_written"] = True
+        print("🔑 Loaded SSH Key from Environment Variable into /tmp/.")
+    else:
+        startup_info["key_written"] = False
+        print("⚠️ VAST_SSH_KEY not found in environment variables!")
     
     # We need to forward Agent API (8000), vLLM (8001), Embedding API (8002), and WebRTC/VNC (8080)
     ports = [8000, 8001, 8002, 8080]
@@ -82,7 +87,10 @@ app = FastAPI(title="IsoMind Orchestration API", lifespan=lifespan)
 
 @app.get("/v1/debug/ssh")
 async def get_ssh_logs():
-    return {"logs": ssh_logs[-100:]}
+    return {
+        "startup_info": startup_info,
+        "logs": ssh_logs[-100:]
+    }
 
 @app.middleware("http")
 async def track_activity(request: Request, call_next):
