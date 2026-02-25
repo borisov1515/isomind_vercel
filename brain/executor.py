@@ -132,11 +132,11 @@ def run_blueprint(blueprint_id: str, start_url: str):
                         
             yield f"[MEMORY] 📊 Best match: Mark ID {best_mark_id} with similarity {best_sim:.2f}"
             
-            if best_sim > 0.85: # Strict visual threshold mapping
+            if best_sim >= 0.70: # Relaxed visual threshold mapping
                 yield f"[AGENT] 🎯 Target Acquired! Clicking {best_mark_id}"
                 execute_action("mouse/click", {"x": marks[best_mark_id]['x'], "y": marks[best_mark_id]['y']})
             else:
-                yield f"[ERROR] ❌ Visual drift detected. No element matched above threshold (0.85). Execution halted."
+                yield f"[ERROR] ❌ Visual drift detected. No element matched above threshold (0.70). Execution halted."
                 break
                 
     yield "\n[SYSTEM] ✅ Blueprint Execution Completed"
