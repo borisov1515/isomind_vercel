@@ -221,21 +221,33 @@ async def proxy_vnc(request: Request, path: str):
     if request.url.query:
         target_url += "?" + request.url.query
         
-    async with httpx.AsyncClient() as client:
-        # Stream the response to handle websockets/large files smoothly
-        req = client.build_request(
-            request.method,
-            target_url,
-            headers=request.headers.raw,
-            content=await request.body()
-        )
-        r = await client.send(req, stream=True)
+    try:
+        # Remove 'host' header to prevent target server from rejecting the request
+        headers = dict(request.headers)
+        headers.pop("host", None)
         
-        return StreamingResponse(
-            r.aiter_raw(),
-            status_code=r.status_code,
-            headers=r.headers
-        )
+        # Do not pass body content on GET or HEAD requests
+        content = None
+        if request.method not in ["GET", "HEAD"]:
+            content = await request.body()
+            
+        async with httpx.AsyncClient() as client:
+            req = client.build_request(
+                request.method,
+                target_url,
+                headers=headers,
+                content=content
+            )
+            r = await client.send(req, stream=True)
+            
+            return StreamingResponse(
+                r.aiter_raw(),
+                status_code=r.status_code,
+                headers=r.headers
+            )
+    except Exception as e:
+        import traceback
+        return HTMLResponse(content=f"<pre>Proxy Error: {str(e)}\n\n{traceback.format_exc()}</pre>", status_code=500)
 
 class ExecuteRequest(BaseModel):
     blueprint_id: str
