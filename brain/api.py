@@ -241,9 +241,14 @@ async def teach_action(req: TeachRequest):
         
         # 4. Update the Blueprint DAG
         res = supabase.table("blueprints").select("state_graph_json").eq("id", req.blueprint_id).execute()
-        graph = res.data[0].get("state_graph_json", {"steps": []}) if res.data else {"steps": []}
         
-        step_num = len(graph.get("steps", [])) + 1
+        graph = res.data[0].get("state_graph_json") if res.data else None
+        if not graph or not isinstance(graph, dict):
+            graph = {"steps": []}
+        if "steps" not in graph:
+            graph["steps"] = []
+            
+        step_num = len(graph["steps"]) + 1
         new_step = {
             "step": step_num,
             "action": req.action,
