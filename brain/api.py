@@ -213,37 +213,10 @@ async def websocket_proxy(websocket: WebSocket):
         except:
             pass
 
-@app.api_route("/vnc/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
-async def proxy_vnc(request: Request, path: str):
-    target_url = f"http://localhost:8080/{path}"
-    
-    if request.url.query:
-        target_url += "?" + request.url.query
-        
-    try:
-        import requests
-        
-        headers = dict(request.headers)
-        headers["host"] = "localhost:8080"
-        headers.pop("accept-encoding", None)
-        
-        req_kwargs = {"headers": headers, "timeout": 30}
-        if request.method not in ["GET", "HEAD"]:
-            req_kwargs["data"] = await request.body()
-            
-        # Send the sync request through the SSH tunnel
-        resp = requests.request(request.method, target_url, **req_kwargs)
-        
-        from fastapi import Response
-        return Response(
-            content=resp.content,
-            status_code=resp.status_code,
-            media_type=resp.headers.get("content-type", "text/html")
-        )
-    except Exception as e:
-        import traceback
-        return HTMLResponse(content=f"<pre>Proxy Sync Error: {str(e)}\n\n{traceback.format_exc()}</pre>", status_code=500)
+from fastapi.staticfiles import StaticFiles
 
+# Mount the noVNC client statically
+app.mount("/vnc", StaticFiles(directory="novnc", html=True), name="vnc")
 class ExecuteRequest(BaseModel):
     blueprint_id: str
     start_url: str
