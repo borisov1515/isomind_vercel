@@ -138,6 +138,56 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi.responses import HTMLResponse
+
+@app.get("/v1/dashboard/vnc", response_class=HTMLResponse)
+async def get_vnc_player():
+    html_content = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <title>IsoMind VNC Stream</title>
+        <meta charset="utf-8">
+        <style>
+            body { margin: 0; background-color: #09090b; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; }
+            iframe { width: 100%; height: 100%; border: none; }
+        </style>
+    </head>
+    <body>
+        <iframe src="http://localhost:8080/vnc.html?autoconnect=true&resize=scale"></iframe>
+    </body>
+    </html>
+    """
+    return html_content
+
+import httpx
+from fastapi import Request
+from starlette.responses import StreamingResponse
+
+@app.api_route("/vnc/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
+async def proxy_vnc(request: Request, path: str):
+    target_url = f"http://localhost:8080/{path}"
+    
+    # We must forward the query params as well
+    if request.url.query:
+        target_url += "?" + request.url.query
+        
+    async with httpx.AsyncClient() as client:
+        # Stream the response to handle websockets/large files smoothly
+        req = client.build_request(
+            request.method,
+            target_url,
+            headers=request.headers.raw,
+            content=await request.body()
+        )
+        r = await client.send(req, stream=True)
+        
+        return StreamingResponse(
+            r.aiter_raw(),
+            status_code=r.status_code,
+            headers=r.headers
+        )
+
 class ExecuteRequest(BaseModel):
     blueprint_id: str
     start_url: str
