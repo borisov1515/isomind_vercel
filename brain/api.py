@@ -230,6 +230,23 @@ class ExecuteRequest(BaseModel):
     blueprint_id: str
     start_url: str
 
+@app.get("/v1/debug/ports")
+async def get_remote_ports():
+    import os, subprocess
+    SSH_HOST = os.getenv("SSH_HOST")
+    SSH_PORT = os.getenv("SSH_PORT", "22")
+    SSH_KEY_PATH = "/tmp/vast_private_key.pem"
+    
+    cmd = [
+        "ssh", "-p", SSH_PORT, "-i", SSH_KEY_PATH, "-o", "StrictHostKeyChecking=no",
+        f"root@{SSH_HOST}", "netstat -tulpn | grep LISTEN"
+    ]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        return {"stdout": proc.stdout, "stderr": proc.stderr}
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.get("/v1/perception/screenshot")
 async def get_screenshot(marks: bool = False):
     import requests
