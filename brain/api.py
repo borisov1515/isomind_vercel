@@ -154,7 +154,7 @@ async def get_vnc_player():
         </style>
     </head>
     <body>
-        <iframe src="/vnc/vnc.html?autoconnect=true&resize=scale"></iframe>
+        <iframe src="/vnc/vnc.html?autoconnect=true&resize=scale&path=vnc/websockify"></iframe>
     </body>
     </html>
     """
