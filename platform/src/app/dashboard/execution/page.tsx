@@ -158,15 +158,16 @@ export default function ExecutionPage() {
                                 <p>Awaiting Execution Command</p>
                             </div>
                         ) : (
-                            <div className="absolute inset-0 w-full h-full">
-                                {/* 
-                  Since Vast.ai usually exposes VNC natively or we can stream the screenshots:
-                  <iframe src={`http://${agentIp}:8080/vnc.html`} className="w-full h-full border-none" />
-                */}
-                                <div className="w-full h-full flex items-center justify-center bg-zinc-950 text-zinc-500 flex-col">
+                            <div className="absolute inset-0 w-full h-full group">
+                                <div className="absolute inset-0 z-10 hidden group-hover:flex items-center justify-center bg-black/50 pointer-events-none transition-opacity">
                                     {status === 'STARTING' && <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />}
-                                    {status === 'STARTING' ? 'Booting Agent Memory Context...' : 'VNC Stream Connected (Placeholder)'}
+                                    <span className="text-white/70 text-sm font-medium">Remote Stream Bridged via WebRTC/Proxy</span>
                                 </div>
+                                <iframe
+                                    src="/api/proxy/vnc"
+                                    className="w-full h-full outline-none border-none"
+                                    title="Agent Live VNC Stream"
+                                />
                             </div>
                         )}
                     </div>
