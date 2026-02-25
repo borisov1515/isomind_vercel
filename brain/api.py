@@ -154,15 +154,64 @@ async def get_vnc_player():
         </style>
     </head>
     <body>
-        <iframe src="http://localhost:8080/vnc.html?autoconnect=true&resize=scale"></iframe>
+        <iframe src="/vnc/vnc.html?autoconnect=true&resize=scale"></iframe>
     </body>
     </html>
     """
     return html_content
 
 import httpx
-from fastapi import Request
+import websockets
+import asyncio
+from fastapi import Request, WebSocket, WebSocketDisconnect
 from starlette.responses import StreamingResponse
+
+@app.websocket("/vnc/websockify")
+async def websocket_proxy(websocket: WebSocket):
+    await websocket.accept()
+    
+    # The local SSH tunnel to the Vast.ai container's noVNC
+    target_ws_url = "ws://localhost:8080/websockify"
+    
+    try:
+        async with websockets.connect(target_ws_url) as target_ws:
+            async def forward_to_target():
+                try:
+                    while True:
+                        data = await websocket.receive()
+                        if 'bytes' in data:
+                            await target_ws.send(data['bytes'])
+                        elif 'text' in data:
+                            await target_ws.send(data['text'])
+                except WebSocketDisconnect:
+                    pass
+                except Exception as e:
+                    print(f"WS Error forwarding client to target: {e}")
+
+            async def forward_to_client():
+                try:
+                    while True:
+                        message = await target_ws.recv()
+                        if isinstance(message, bytes):
+                            await websocket.send_bytes(message)
+                        else:
+                            await websocket.send_text(message)
+                except websockets.exceptions.ConnectionClosed:
+                    pass
+                except Exception as e:
+                    print(f"WS Error forwarding target to client: {e}")
+
+            await asyncio.gather(
+                forward_to_target(),
+                forward_to_client()
+            )
+            
+    except Exception as e:
+        print(f"WebSocket Proxy Connection Error to local port 8080: {e}")
+        try:
+            await websocket.close()
+        except:
+            pass
 
 @app.api_route("/vnc/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
 async def proxy_vnc(request: Request, path: str):
