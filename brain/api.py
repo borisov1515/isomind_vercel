@@ -222,9 +222,12 @@ async def proxy_vnc(request: Request, path: str):
         target_url += "?" + request.url.query
         
     try:
-        # Remove 'host' header to prevent target server from rejecting the request
+        # Override headers for the local websockify HTTP server
         headers = dict(request.headers)
-        headers.pop("host", None)
+        headers["host"] = "localhost:8080"
+        
+        # Strip encoding properties to prevent websockify/httpx chunking bugs
+        headers.pop("accept-encoding", None)
         
         # Do not pass body content on GET or HEAD requests
         content = None
