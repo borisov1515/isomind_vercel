@@ -9,7 +9,12 @@ export default function ExecutionPage() {
     const [blueprints, setBlueprints] = useState<any[]>([])
     const [selectedBlueprint, setSelectedBlueprint] = useState('')
     const [status, setStatus] = useState<'IDLE' | 'STARTING' | 'RUNNING' | 'COMPLETED' | 'ERROR'>('IDLE')
-    const [logs, setLogs] = useState<string[]>([])
+
+    // Inject Vercel build info into the initial logs so the user knows the exact version
+    const [logs, setLogs] = useState<string[]>([
+        `[SYSTEM] Dashboard UI Version: ${process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.substring(0, 7) || 'Local'}`,
+        `[SYSTEM] Environment: ${process.env.NEXT_PUBLIC_VERCEL_ENV || 'development'}`
+    ])
 
     const supabase = createClient()
 
