@@ -168,13 +168,22 @@ from starlette.responses import StreamingResponse
 
 @app.websocket("/vnc/websockify")
 async def websocket_proxy(websocket: WebSocket):
-    await websocket.accept()
+    # Negotiate subprotocol (noVNC requires 'binary' or 'base64')
+    requested_protocols = websocket.headers.get("Sec-WebSocket-Protocol", "")
+    subprotocol = None
+    if "binary" in requested_protocols:
+        subprotocol = "binary"
+    elif "base64" in requested_protocols:
+        subprotocol = "base64"
+        
+    await websocket.accept(subprotocol=subprotocol)
     
     # The local SSH tunnel to the Vast.ai container's noVNC
     target_ws_url = "ws://localhost:8080/websockify"
     
+    subprotocols = [subprotocol] if subprotocol else None
     try:
-        async with websockets.connect(target_ws_url) as target_ws:
+        async with websockets.connect(target_ws_url, subprotocols=subprotocols) as target_ws:
             async def forward_to_target():
                 try:
                     while True:
