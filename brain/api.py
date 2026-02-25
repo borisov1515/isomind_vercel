@@ -243,17 +243,11 @@ async def proxy_vnc(request: Request, path: str):
             )
             r = await client.send(req)
             
-            # Filter hop-by-hop headers before returning
-            resp_headers = dict(r.headers)
-            resp_headers.pop("content-encoding", None)
-            resp_headers.pop("content-length", None)
-            resp_headers.pop("transfer-encoding", None)
-            
             from fastapi import Response
             return Response(
                 content=r.content,
                 status_code=r.status_code,
-                headers=resp_headers
+                media_type=r.headers.get("content-type", "text/html")
             )
     except Exception as e:
         import traceback
