@@ -238,12 +238,19 @@ async def proxy_vnc(request: Request, path: str):
                 headers=headers,
                 content=content
             )
-            r = await client.send(req, stream=True)
+            r = await client.send(req)
             
-            return StreamingResponse(
-                r.aiter_raw(),
+            # Filter hop-by-hop headers before returning
+            resp_headers = dict(r.headers)
+            resp_headers.pop("content-encoding", None)
+            resp_headers.pop("content-length", None)
+            resp_headers.pop("transfer-encoding", None)
+            
+            from fastapi import Response
+            return Response(
+                content=r.content,
                 status_code=r.status_code,
-                headers=r.headers
+                headers=resp_headers
             )
     except Exception as e:
         import traceback
