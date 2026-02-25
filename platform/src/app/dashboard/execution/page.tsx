@@ -169,7 +169,7 @@ export default function ExecutionPage() {
                                     <span className="text-white/70 text-sm font-medium">Remote Stream Bridged via WebRTC/Proxy</span>
                                 </div>
                                 <iframe
-                                    src="/api/proxy/vnc"
+                                    src={`${process.env.NEXT_PUBLIC_API_URL || 'https://isomind-orchestrator.onrender.com'}/v1/dashboard/vnc`}
                                     className="w-full h-full outline-none border-none"
                                     title="Agent Live VNC Stream"
                                 />
