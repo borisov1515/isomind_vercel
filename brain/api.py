@@ -193,15 +193,23 @@ async def teach_action(req: TeachRequest):
         
         # Logic: Find which DOM element 'mark' contains the user's (x, y) click
         for m_id, m in marks.items():
+            # Safely get bounding box falling back to center point coords
+            m_left = m.get('left', m.get('x', 0) - m.get('width', 10)/2)
+            m_top = m.get('top', m.get('y', 0) - m.get('height', 10)/2)
+            m_width = m.get('width', 10)
+            m_height = m.get('height', 10)
+            
             # Check if point inside bounding box
-            if m['left'] <= req.x <= (m['left'] + m['width']) and m['top'] <= req.y <= (m['top'] + m['height']):
+            if m_left <= req.x <= (m_left + m_width) and m_top <= req.y <= (m_top + m_height):
                 best_mark_id = m_id
                 break
                 
         # Fallback to closest center distance if exact box not found
         if not best_mark_id:
             for m_id, m in marks.items():
-                dist = ((m['x'] - req.x)**2 + (m['y'] - req.y)**2)**0.5
+                m_x = m.get('x', 0)
+                m_y = m.get('y', 0)
+                dist = ((m_x - req.x)**2 + (m_y - req.y)**2)**0.5
                 if dist < min_dist:
                     min_dist = dist
                     best_mark_id = m_id
@@ -219,13 +227,15 @@ async def teach_action(req: TeachRequest):
             raise HTTPException(status_code=500, detail="Failed to embed Visual Anchor")
             
         # 3. Save Memory to Supabase
+        width_pct = target_mark.get('width', 10) / 1920
+        height_pct = target_mark.get('height', 10) / 1080
         supabase.table("visual_anchors").insert({
             "blueprint_id": req.blueprint_id,
             "semantic_label": req.label,
             "embedding": vector,
             "bounding_box_relative": {
-                "width_pct": target_mark['width'] / 1920,
-                "height_pct": target_mark['height'] / 1080
+                "width_pct": width_pct,
+                "height_pct": height_pct
             }
         }).execute()
         
@@ -248,10 +258,13 @@ async def teach_action(req: TeachRequest):
         # 5. Execute the click in the browser so the stream advances
         import requests
         PROXY_URL = "http://localhost:8000"
+        t_x = target_mark.get('x', 0)
+        t_y = target_mark.get('y', 0)
+        
         if req.action == "click":
-            requests.post(f"{PROXY_URL}/v1/action/mouse/click", json={"x": target_mark['x'], "y": target_mark['y']})
+            requests.post(f"{PROXY_URL}/v1/action/mouse/click", json={"x": t_x, "y": t_y})
         elif req.action == "type":
-            requests.post(f"{PROXY_URL}/v1/action/mouse/click", json={"x": target_mark['x'], "y": target_mark['y']})
+            requests.post(f"{PROXY_URL}/v1/action/mouse/click", json={"x": t_x, "y": t_y})
             requests.post(f"{PROXY_URL}/v1/action/keyboard/type", json={"text": req.text})
             
         return {"status": "success", "mark_id": best_mark_id, "step_added": new_step}
