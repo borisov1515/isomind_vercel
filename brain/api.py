@@ -180,7 +180,7 @@ class TeachRequest(BaseModel):
 async def teach_action(req: TeachRequest):
     # This endpoint replaces the CLI teacher.py
     # 1. Ask Vast.ai browser for current DOM state
-    from executor import get_screenshot_and_marks, crop_image_around_mark, get_embedding, supabase, update_blueprint_state
+    from executor import get_screenshot_and_marks, crop_image_around_mark, get_embedding, supabase
     
     img_b64, marks = get_screenshot_and_marks()
     if not img_b64 or not marks:
