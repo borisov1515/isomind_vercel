@@ -160,7 +160,7 @@ class NavigateRequest(BaseModel):
 @app.post("/v1/action/browser/navigate")
 async def browser_navigate(req: NavigateRequest):
     import requests
-    PROXY_URL = os.getenv("AGENT_API_URL", "http://localhost:8000")
+    PROXY_URL = "http://localhost:8000"
     try:
         resp = requests.post(f"{PROXY_URL}/v1/action/browser/navigate", json={"url": req.url})
         resp.raise_for_status()
@@ -178,82 +178,88 @@ class TeachRequest(BaseModel):
 
 @app.post("/v1/teach/action")
 async def teach_action(req: TeachRequest):
-    # This endpoint replaces the CLI teacher.py
-    # 1. Ask Vast.ai browser for current DOM state
-    from executor import get_screenshot_and_marks, crop_image_around_mark, get_embedding, supabase
-    
-    img_b64, marks = get_screenshot_and_marks()
-    if not img_b64 or not marks:
-        raise HTTPException(status_code=500, detail="Failed to get screen context")
+    import traceback
+    try:
+        # This endpoint replaces the CLI teacher.py
+        # 1. Ask Vast.ai browser for current DOM state
+        from executor import get_screenshot_and_marks, crop_image_around_mark, get_embedding, supabase
         
-    best_mark_id = None
-    min_dist = float('inf')
-    
-    # Logic: Find which DOM element 'mark' contains the user's (x, y) click
-    for m_id, m in marks.items():
-        # Check if point inside bounding box
-        if m['left'] <= req.x <= (m['left'] + m['width']) and m['top'] <= req.y <= (m['top'] + m['height']):
-            best_mark_id = m_id
-            break
+        img_b64, marks = get_screenshot_and_marks()
+        if not img_b64 or not marks:
+            raise HTTPException(status_code=500, detail="Failed to get screen context")
             
-    # Fallback to closest center distance if exact box not found
-    if not best_mark_id:
+        best_mark_id = None
+        min_dist = float('inf')
+        
+        # Logic: Find which DOM element 'mark' contains the user's (x, y) click
         for m_id, m in marks.items():
-            dist = ((m['x'] - req.x)**2 + (m['y'] - req.y)**2)**0.5
-            if dist < min_dist:
-                min_dist = dist
+            # Check if point inside bounding box
+            if m['left'] <= req.x <= (m['left'] + m['width']) and m['top'] <= req.y <= (m['top'] + m['height']):
                 best_mark_id = m_id
+                break
                 
-    if not best_mark_id:
-        raise HTTPException(status_code=400, detail="Could not find an interactive element near click")
+        # Fallback to closest center distance if exact box not found
+        if not best_mark_id:
+            for m_id, m in marks.items():
+                dist = ((m['x'] - req.x)**2 + (m['y'] - req.y)**2)**0.5
+                if dist < min_dist:
+                    min_dist = dist
+                    best_mark_id = m_id
+                    
+        if not best_mark_id:
+            raise HTTPException(status_code=400, detail="Could not find an interactive element near click")
+            
+        target_mark = marks[best_mark_id]
+        print(f"✅ Web Teacher matched click ({req.x}, {req.y}) to Mark {best_mark_id}")
         
-    target_mark = marks[best_mark_id]
-    print(f"✅ Web Teacher matched click ({req.x}, {req.y}) to Mark {best_mark_id}")
-    
-    # 2. Crop & Embed Visual Anchor
-    crop_b64 = crop_image_around_mark(img_b64, target_mark)
-    vector = get_embedding(crop_b64)
-    if not vector:
-        raise HTTPException(status_code=500, detail="Failed to embed Visual Anchor")
+        # 2. Crop & Embed Visual Anchor
+        crop_b64 = crop_image_around_mark(img_b64, target_mark)
+        vector = get_embedding(crop_b64)
+        if not vector:
+            raise HTTPException(status_code=500, detail="Failed to embed Visual Anchor")
+            
+        # 3. Save Memory to Supabase
+        supabase.table("visual_anchors").insert({
+            "blueprint_id": req.blueprint_id,
+            "semantic_label": req.label,
+            "embedding": vector,
+            "bounding_box_relative": {
+                "width_pct": target_mark['width'] / 1920,
+                "height_pct": target_mark['height'] / 1080
+            }
+        }).execute()
         
-    # 3. Save Memory to Supabase
-    supabase.table("visual_anchors").insert({
-        "blueprint_id": req.blueprint_id,
-        "semantic_label": req.label,
-        "embedding": vector,
-        "bounding_box_relative": {
-            "width_pct": target_mark['width'] / 1920,
-            "height_pct": target_mark['height'] / 1080
+        # 4. Update the Blueprint DAG
+        res = supabase.table("blueprints").select("state_graph_json").eq("id", req.blueprint_id).execute()
+        graph = res.data[0].get("state_graph_json", {"steps": []}) if res.data else {"steps": []}
+        
+        step_num = len(graph.get("steps", [])) + 1
+        new_step = {
+            "step": step_num,
+            "action": req.action,
+            "semantic_target": req.label
         }
-    }).execute()
-    
-    # 4. Update the Blueprint DAG
-    res = supabase.table("blueprints").select("state_graph_json").eq("id", req.blueprint_id).execute()
-    graph = res.data[0].get("state_graph_json", {"steps": []}) if res.data else {"steps": []}
-    
-    step_num = len(graph.get("steps", [])) + 1
-    new_step = {
-        "step": step_num,
-        "action": req.action,
-        "semantic_target": req.label
-    }
-    if req.action == "type":
-        new_step["text"] = req.text
+        if req.action == "type":
+            new_step["text"] = req.text
+            
+        graph["steps"].append(new_step)
+        supabase.table("blueprints").update({"state_graph_json": graph}).eq("id", req.blueprint_id).execute()
         
-    graph["steps"].append(new_step)
-    supabase.table("blueprints").update({"state_graph_json": graph}).eq("id", req.blueprint_id).execute()
-    
-    # 5. Execute the click in the browser so the stream advances
-    import requests
-    import os
-    PROXY_URL = os.getenv("AGENT_API_URL", "http://localhost:8000")
-    if req.action == "click":
-        requests.post(f"{PROXY_URL}/v1/action/mouse/click", json={"x": target_mark['x'], "y": target_mark['y']})
-    elif req.action == "type":
-        requests.post(f"{PROXY_URL}/v1/action/mouse/click", json={"x": target_mark['x'], "y": target_mark['y']})
-        requests.post(f"{PROXY_URL}/v1/action/keyboard/type", json={"text": req.text})
-        
-    return {"status": "success", "mark_id": best_mark_id, "step_added": new_step}
+        # 5. Execute the click in the browser so the stream advances
+        import requests
+        PROXY_URL = "http://localhost:8000"
+        if req.action == "click":
+            requests.post(f"{PROXY_URL}/v1/action/mouse/click", json={"x": target_mark['x'], "y": target_mark['y']})
+        elif req.action == "type":
+            requests.post(f"{PROXY_URL}/v1/action/mouse/click", json={"x": target_mark['x'], "y": target_mark['y']})
+            requests.post(f"{PROXY_URL}/v1/action/keyboard/type", json={"text": req.text})
+            
+        return {"status": "success", "mark_id": best_mark_id, "step_added": new_step}
+    except Exception as e:
+        print("💥 FATAL ERROR IN TEACH_ACTION:")
+        err_str = traceback.format_exc()
+        print(err_str)
+        raise HTTPException(status_code=500, detail=err_str)
 
 @app.post("/v1/execute")
 async def execute_task(req: ExecuteRequest):

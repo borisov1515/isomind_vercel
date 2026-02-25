@@ -9,8 +9,8 @@ from supabase import create_client, Client
 
 load_dotenv()
 
-AGENT_API_URL = os.getenv("AGENT_API_URL", "http://localhost:8000")
-EMBEDDING_API_URL = os.getenv("EMBEDDING_API_URL", "http://localhost:8002")
+AGENT_API_URL = "http://localhost:8000"
+EMBEDDING_API_URL = "http://localhost:8002"
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
