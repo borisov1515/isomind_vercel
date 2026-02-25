@@ -217,41 +217,32 @@ async def websocket_proxy(websocket: WebSocket):
 async def proxy_vnc(request: Request, path: str):
     target_url = f"http://localhost:8080/{path}"
     
-    # We must forward the query params as well
     if request.url.query:
         target_url += "?" + request.url.query
         
     try:
-        # Override headers for the local websockify HTTP server
+        import requests
+        
         headers = dict(request.headers)
         headers["host"] = "localhost:8080"
-        
-        # Strip encoding properties to prevent websockify/httpx chunking bugs
         headers.pop("accept-encoding", None)
         
-        # Do not pass body content on GET or HEAD requests
-        content = None
+        req_kwargs = {"headers": headers, "timeout": 30}
         if request.method not in ["GET", "HEAD"]:
-            content = await request.body()
+            req_kwargs["data"] = await request.body()
             
-        async with httpx.AsyncClient() as client:
-            req = client.build_request(
-                request.method,
-                target_url,
-                headers=headers,
-                content=content
-            )
-            r = await client.send(req)
-            
-            from fastapi import Response
-            return Response(
-                content=r.content,
-                status_code=r.status_code,
-                media_type=r.headers.get("content-type", "text/html")
-            )
+        # Send the sync request through the SSH tunnel
+        resp = requests.request(request.method, target_url, **req_kwargs)
+        
+        from fastapi import Response
+        return Response(
+            content=resp.content,
+            status_code=resp.status_code,
+            media_type=resp.headers.get("content-type", "text/html")
+        )
     except Exception as e:
         import traceback
-        return HTMLResponse(content=f"<pre>Proxy Error: {str(e)}\n\n{traceback.format_exc()}</pre>", status_code=500)
+        return HTMLResponse(content=f"<pre>Proxy Sync Error: {str(e)}\n\n{traceback.format_exc()}</pre>", status_code=500)
 
 class ExecuteRequest(BaseModel):
     blueprint_id: str
