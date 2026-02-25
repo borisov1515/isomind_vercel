@@ -148,7 +148,7 @@ async def get_screenshot(marks: bool = False):
     PROXY_URL = os.getenv("AGENT_API_URL", "http://localhost:8000")
     try:
         # Proxy the request to the Vast.ai container over the SSH tunnel
-        resp = requests.get(f"{PROXY_URL}/v1/perception/screenshot?marks={str(marks).lower()}")
+        resp = requests.get(f"{PROXY_URL}/v1/perception/screenshot?marks={str(marks).lower()}", timeout=30)
         resp.raise_for_status()
         return resp.json()
     except Exception as e:
@@ -162,7 +162,7 @@ async def browser_navigate(req: NavigateRequest):
     import requests
     PROXY_URL = "http://localhost:8000"
     try:
-        resp = requests.post(f"{PROXY_URL}/v1/action/browser/navigate", json={"url": req.url})
+        resp = requests.post(f"{PROXY_URL}/v1/action/browser/navigate", json={"url": req.url}, timeout=30)
         resp.raise_for_status()
         return resp.json()
     except Exception as e:
@@ -267,10 +267,10 @@ async def teach_action(req: TeachRequest):
         t_y = target_mark.get('y', 0)
         
         if req.action == "click":
-            requests.post(f"{PROXY_URL}/v1/action/mouse/click", json={"x": t_x, "y": t_y})
+            requests.post(f"{PROXY_URL}/v1/action/mouse/click", json={"x": t_x, "y": t_y}, timeout=30)
         elif req.action == "type":
-            requests.post(f"{PROXY_URL}/v1/action/mouse/click", json={"x": t_x, "y": t_y})
-            requests.post(f"{PROXY_URL}/v1/action/keyboard/type", json={"text": req.text})
+            requests.post(f"{PROXY_URL}/v1/action/mouse/click", json={"x": t_x, "y": t_y}, timeout=30)
+            requests.post(f"{PROXY_URL}/v1/action/keyboard/type", json={"text": req.text}, timeout=30)
             
         return {"status": "success", "mark_id": best_mark_id, "step_added": new_step}
     except Exception as e:
